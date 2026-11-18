@@ -1,0 +1,36 @@
+/* Plot (survey number) workspace: header, key-values, tabs
+   Extracted from the provided admin HTML template. Do not restyle; extend only. */
+/* land workspace */
+.nav .subnav{display:flex;flex-direction:column;gap:1px;margin:2px 0 6px 14px;padding-left:10px;border-left:1px solid var(--line)}
+.nav .subnav button{font-size:13px;padding:5px 10px}
+.nav .subnav .cur-ref{font:500 11px var(--f-mono);color:var(--muted);padding:4px 10px 2px;overflow-wrap:anywhere}
+.reflink{border:0;background:none;padding:0;cursor:pointer;font:600 12.5px var(--f-mono);color:var(--accent);text-align:left;white-space:nowrap}
+.reflink:hover{text-decoration:underline}
+.back{align-self:flex-start}
+.lhead{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.lh-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 18px 14px;border-bottom:1px solid var(--line-2)}
+.lh-top h1{margin:2px 0 4px;font:600 21px var(--f-mono);letter-spacing:-.01em;overflow-wrap:anywhere}
+.lh-top h1.new{font-family:var(--f-ui);font-weight:700}
+.lh-top p{margin:0;color:var(--muted)}
+.lh-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin:0}
+.kv div{padding:10px 18px;border-right:1px solid var(--line-2);border-bottom:1px solid var(--line-2);min-width:0}
+.kv dt{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.kv dd{margin:2px 0 0;font-weight:500;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.ltabs{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:0 6px}
+.ltabs .tabs{border-bottom:0;min-width:max-content}
+.ltabs .tabs button{padding:11px 14px;display:flex;gap:6px;align-items:center}
+.ltabs .tabs button i{font:500 10.5px var(--f-mono);font-style:normal;color:var(--muted)}
+.ltabs .lockmsg{padding:11px 10px;color:var(--muted);font-size:12.5px;align-self:center}
+.inline-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.inline-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--line-2)}
+.inline-bar h2{margin:0;font-size:15px}
+#inlineBody{padding:18px;display:flex;flex-direction:column;gap:20px}
+#inlineBody fieldset{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.inline-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line-2);flex-wrap:wrap}
+.tabhead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.tabhead h2{margin:0;font-size:17px}
+.tabhead p{margin:3px 0 0;color:var(--muted);max-width:72ch;font-size:13px}
+.ver-list{display:flex;gap:6px;flex-wrap:wrap}
+.ver-list a{border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:12px;text-decoration:none;color:var(--ink)}
+.ver-list a.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}

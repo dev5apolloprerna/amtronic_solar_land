@@ -1,0 +1,35 @@
+/* Login / password reset
+   Extracted from the provided admin HTML template. Do not restyle; extend only. */
+/* login */
+.login{min-height:100%;display:grid;grid-template-columns:minmax(0,1fr);background:var(--paper)}
+.lg-side{background:var(--surface);border-right:1px solid var(--line);padding:40px max(16px,4vw);display:flex;flex-direction:column;gap:28px;justify-content:center}
+.brand-lg{display:flex;gap:12px;align-items:center}
+.brand-lg .logo{width:44px;height:44px}
+.brand-lg b{display:block;font-size:18px}
+.brand-lg small{color:var(--muted)}
+.ph-img{position:relative;aspect-ratio:16/10;max-width:100%;border:1.5px dashed var(--muted);border-radius:var(--r);display:grid;place-items:center;color:var(--muted);font:500 12px var(--f-mono);background:linear-gradient(to top right,transparent calc(50% - .5px),var(--line) 50%,transparent calc(50% + .5px)),linear-gradient(to bottom right,transparent calc(50% - .5px),var(--line) 50%,transparent calc(50% + .5px))}
+.ph-img span{background:var(--surface);padding:4px 8px}
+.lg-points{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.lg-points li{display:flex;gap:10px;align-items:baseline}
+.lg-points li::before{content:"";width:8px;height:8px;border:1.5px solid var(--accent);border-radius:2px;flex:none;transform:translateY(-1px)}
+.lg-main{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px 16px}
+.lg-card{width:min(420px,100%);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:28px 26px;display:flex;flex-direction:column;gap:16px}
+.lg-card h1{margin:0;font-size:22px}
+.lg-card p{margin:0;color:var(--muted)}
+.lg-card form{display:flex;flex-direction:column;gap:14px}
+.lg-card .fld input{padding:10px 12px}
+.pw{position:relative}
+.pw input{padding-right:64px!important}
+.pw .lnk{position:absolute;right:6px;top:50%;transform:translateY(-50%)}
+.lg-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.chk{display:flex;gap:6px;align-items:center;cursor:pointer}
+.lg-btn{padding:11px;font-size:14px;width:100%}
+.demo{border-top:1px dashed var(--line);padding-top:14px;display:flex;flex-direction:column;gap:8px}
+.demo-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.demo-list button{border:1px solid var(--line);background:var(--sunk);border-radius:var(--r);padding:8px 10px;text-align:left;cursor:pointer;font-size:12.5px;min-width:0}
+.demo-list button:hover{border-color:var(--accent)}
+.demo-list b{display:block;font:500 12px var(--f-mono);overflow-wrap:anywhere}
+.demo-list span{color:var(--muted);font-size:11.5px}
+.ok-box{background:var(--ok-soft);color:var(--ok);border-radius:var(--r);padding:12px;font-size:13px}
+.lg-foot{font:500 10.5px var(--f-mono);letter-spacing:.06em;color:var(--muted);margin:0}
+@media (max-width:860px){ .login{grid-template-columns:minmax(0,1fr)} .lg-side{border-right:0;border-bottom:1px solid var(--line);padding-block:20px} .lg-side .ph-img,.lg-side .lg-points{display:none} .who .uname{display:none} }
