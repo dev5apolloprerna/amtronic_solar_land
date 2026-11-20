@@ -8,32 +8,22 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/** STATE_MASTER */
 class State extends Model
 {
     use SoftDeletes, HasUserStamps, Auditable;
 
+    public const CODE_PREFIX = 'ST';
     protected string $auditModule = 'state';
+    protected $fillable = ['state_name', 'state_code'];
 
-    protected $fillable = ['name', 'code', 'status'];
+    public function auditLabel(): string { return $this->state_name; }
 
-    public function auditLabel(): string
+    /** [id => 'Gujarat (GJ)'] for dropdowns */
+    public static function stateOptions(): array
     {
-        return $this->name;
+        return static::orderBy('id')->get()->mapWithKeys(fn ($s) => [$s->id => "$s->state_name ($s->state_code)"])->all();
     }
-
-    public function cities(): HasMany
-    {
-        return $this->hasMany(City::class);
-    }
-
-    public function plots(): HasMany
-    {
-        return $this->hasMany(Plot::class);
-    }
-
-    /** Code is locked once any plot uses this state. */
-    public function codeLocked(): bool
-    {
-        return $this->exists && $this->plots()->withTrashed()->exists();
-    }
+    public function districts(): HasMany { return $this->hasMany(District::class); }
+    public function lands(): HasMany { return $this->hasMany(Land::class); }
 }

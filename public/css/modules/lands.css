@@ -1,0 +1,7 @@
+/* Land Master list and the land parcel workspace (tabs). Template styles live in app.css. */
+.lhead .kv dd .sub{display:block;font-weight:400}
+.panel h3 .sub{display:inline;margin-left:6px;font-weight:400}
+.panel .pb .util + .util{margin-top:6px}
+.ltabs .tabs a[aria-selected="true"]{color:var(--ink)}
+#landRef .chip{margin-left:6px}
+.cap .cap-head + .bar{margin-top:-2px}

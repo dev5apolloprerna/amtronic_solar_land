@@ -7,17 +7,17 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 
 /**
- * Sign-in accounts. CHANGE THESE PASSWORDS after the first login.
- * superadmin / Admin@12345 (all SPVs). Demo users are added by DemoDataSeeder.
+ * Super Admin sign-in (all SPVs). CHANGE THE PASSWORD after the first login.
+ * Default: superadmin / Demo@123, or ADMIN_EMAIL / ADMIN_PASSWORD from .env.
  */
 class UserSeeder extends Seeder
 {
     public function run(): void
     {
         User::updateOrCreate(['username' => 'superadmin'], [
-            'name' => 'Super Admin',
-            'email' => env('ADMIN_EMAIL', 'admin@example.com'),
-            'password' => env('ADMIN_PASSWORD', 'Admin@12345'),
+            'name' => 'Nikhil Shah',
+            'email' => env('ADMIN_EMAIL', 'nikhil.shah@example.com'),
+            'password' => env('ADMIN_PASSWORD', 'Demo@123'),
             'role_id' => Role::where('is_super', true)->value('id'),
             'is_active' => true,
         ]);

@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
+/** USER_MASTER */
 class User extends Authenticatable
 {
     use Notifiable, SoftDeletes, HasUserStamps, Auditable;
@@ -25,13 +26,7 @@ class User extends Authenticatable
 
     protected function casts(): array
     {
-        return [
-            'password' => 'hashed',
-            'is_active' => 'boolean',
-            'is_locked' => 'boolean',
-            'last_login_at' => 'datetime',
-            'email_verified_at' => 'datetime',
-        ];
+        return ['password' => 'hashed', 'is_active' => 'boolean', 'is_locked' => 'boolean', 'last_login_at' => 'datetime', 'email_verified_at' => 'datetime'];
     }
 
     public function auditLabel(): string
@@ -39,22 +34,15 @@ class User extends Authenticatable
         return $this->username;
     }
 
-    public function role(): BelongsTo
-    {
-        return $this->belongsTo(Role::class);
-    }
+    public function role(): BelongsTo { return $this->belongsTo(Role::class); }
 
-    public function spvs(): BelongsToMany
-    {
-        return $this->belongsToMany(Spv::class, 'user_spv_access')->withTimestamps();
-    }
+    public function spvs(): BelongsToMany { return $this->belongsToMany(Spv::class, 'user_spv_access')->withTimestamps(); }
 
     public function isSuper(): bool
     {
         return (bool) $this->role?->is_super;
     }
 
-    /** IDs of SPVs this user may see. */
     public function spvIds(): array
     {
         return $this->spvIdCache ??= $this->spvs()->pluck('spvs.id')->all();
@@ -65,7 +53,6 @@ class User extends Authenticatable
         return $this->isSuper() || in_array($spvId, $this->spvIds(), true);
     }
 
-    /** Role permission check, e.g. $user->can('lease', 'edit') style via hasPermission(). */
     public function hasPermission(string $module, string $action = 'view'): bool
     {
         if ($this->isSuper()) {
@@ -75,9 +62,8 @@ class User extends Authenticatable
             return false;
         }
         $this->permCache ??= $this->role?->permissions->keyBy('module')->all() ?? [];
-        $perm = $this->permCache[$module] ?? null;
 
-        return (bool) ($perm?->{'can_'.$action} ?? false);
+        return (bool) (($this->permCache[$module] ?? null)?->{'can_'.$action} ?? false);
     }
 
     public function initials(): string

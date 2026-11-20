@@ -2,90 +2,73 @@
 
 namespace App\Services;
 
-use App\Enums\PaymentFrequency;
 use App\Models\Lease;
 use App\Models\RentSchedule;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Builds the rent schedule of a lease:
- * instalment = annual rent x months/12 x (1 + escalation%) ^ floor(lease year / escalate-every years)
+ * Rent schedule generator (same rules as the template):
+ * annual rent = leased acres × rent per acre; instalment = annual × months/12 × (1 + escalation%)^floor(year / every);
+ * instalments with any payment are kept; the rest are regenerated.
  */
 class RentScheduleService
 {
-    public function __construct(private RentAllocationService $allocations) {}
+    public const FREQ = ['Annual' => 12, 'Half-yearly' => 6, 'Quarterly' => 3, 'Monthly' => 1];
 
-    public static function annualRent(string $rentType, float $rate, float $areaAcres): float
+    public static function months(string $freq): int
     {
-        return round($rentType === 'Fixed annual' ? $rate : $rate * $areaAcres, 2);
+        return self::FREQ[$freq] ?? 12;
     }
 
-    /**
-     * (Re)generate unpaid instalments. Paid / part-paid instalments are kept as they are.
-     * Draft and Terminated leases get no new instalments. Returns the number generated.
-     */
+    public static function endDate(string $start, int $months): Carbon
+    {
+        return Carbon::parse($start)->addMonthsNoOverflow($months)->subDay();
+    }
+
+    /** Year-1 rent per instalment. */
+    public static function instalment(float $acres, float $rate, string $freq): float
+    {
+        return round($acres * $rate * self::months($freq) / 12);
+    }
+
     public function generate(Lease $lease): int
     {
-        $made = AuditService::muted(fn () => $this->build($lease));
-        app(AuditService::class)->log('schedule', 'UPDATE', $lease->id, $lease->lease_no, 'rent_schedule', null, "$made unpaid instalments generated", force: true);
+        $made = AuditService::muted(fn () => DB::transaction(function () use ($lease) {
+            $keep = RentSchedule::where('lease_id', $lease->id)->where(fn ($q) => $q->has('payments')->orWhere('payment_status', 'Paid'))->get();
+            RentSchedule::where('lease_id', $lease->id)->whereNotIn('id', $keep->pluck('id'))->delete();
+            $keptDates = $keep->map(fn ($s) => $s->due_date->toDateString())->all();
 
-        return $made;
-    }
-
-    private function build(Lease $lease): int
-    {
-        return DB::transaction(function () use ($lease) {
-            $kept = $lease->schedules()->whereIn('status', ['Paid', 'Partially paid'])->pluck('installment_no')->all();
-            $lease->schedules()->whereNotIn('status', ['Paid', 'Partially paid'])->get()->each->delete();
-
-            if (! in_array($lease->status, ['Active', 'Expired'], true)) {
-                return 0;
-            }
-
-            $fm = PaymentFrequency::monthsFor($lease->payment_frequency);
-            $count = intdiv((int) $lease->lease_duration_months, $fm);
-            $annual = (float) $lease->annual_rent;
+            $fm = self::months($lease->rent_frequency);
+            $n = intdiv((int) $lease->lease_duration_mths, $fm);
+            $annual = (float) $lease->leased_area_acres * (float) $lease->rent_rate_per_acre;
             $every = (int) $lease->escalation_every_yrs;
-            $esc = (float) $lease->escalation_pct;
-            $tdsRate = $lease->tds_applicable === 'Yes' ? (float) $lease->tds_rate : 0;
             $made = 0;
-
-            for ($i = 0; $i < $count; $i++) {
-                $no = $i + 1;
-                if (in_array($no, $kept, true)) {
+            for ($i = 0; $i < $n; $i++) {
+                $due = $lease->lease_start_date->copy()->addMonthsNoOverflow($i * $fm);
+                if (in_array($due->toDateString(), $keptDates, true)) {
                     continue;
                 }
-                $due = $lease->lease_start_date->copy()->addMonthsNoOverflow($i * $fm);
                 $year = intdiv($i * $fm, 12);
                 $steps = $every > 0 ? intdiv($year, $every) : 0;
-                $amount = round($annual * $fm / 12 * pow(1 + $esc / 100, $steps), 2);
-                $tds = round($amount * $tdsRate / 100, 2);
-
-                $schedule = RentSchedule::create([
-                    'lease_id' => $lease->id,
-                    'plot_id' => $lease->plot_id,
-                    'installment_no' => $no,
-                    'period_from' => $due,
-                    'period_to' => $due->copy()->addMonthsNoOverflow($fm)->subDay(),
-                    'due_date' => $due,
-                    'rent_amount' => $amount,
-                    'tds_amount' => $tds,
-                    'net_payable' => round($amount - $tds, 2),
-                    'status' => 'Pending',
-                    'alert_sent' => 'No',
+                $amt = round($annual * $fm / 12 * pow(1 + (float) $lease->escalation_pct / 100, $steps));
+                $tds = $lease->tds_applicable === 'Yes' ? round($amt * (float) $lease->tds_rate / 100) : 0;
+                RentSchedule::create([
+                    'lease_id' => $lease->id, 'land_id' => $lease->land_id, 'due_month' => $due->format('M Y'), 'due_date' => $due,
+                    'rent_amount' => $amt, 'tds_amount' => $tds, 'net_payable' => $amt - $tds, 'payment_status' => 'Pending', 'alert_sent_flag' => 'No',
                 ]);
-                $this->allocations->allocate($schedule);
                 $made++;
             }
 
             return $made;
-        });
+        }));
+
+        return $made;
     }
 
-    /** Whether a change to these fields needs the schedule rebuilt. */
     public static function termsChanged(Lease $lease): bool
     {
-        return $lease->wasChanged(['lease_start_date', 'lease_duration_months', 'annual_rent', 'payment_frequency', 'escalation_pct',
-            'escalation_every_yrs', 'tds_applicable', 'tds_rate', 'status', 'plot_id']);
+        return $lease->wasChanged(['leased_area_acres', 'rent_rate_per_acre', 'rent_frequency', 'escalation_pct', 'escalation_every_yrs', 'lease_start_date',
+            'lease_duration_mths', 'tds_applicable', 'tds_rate']);
     }
 }

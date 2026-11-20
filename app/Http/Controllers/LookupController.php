@@ -3,131 +3,90 @@
 namespace App\Http\Controllers;
 
 use App\Models\City;
-use App\Models\Lease;
+use App\Models\District;
+use App\Models\Land;
 use App\Models\Park;
-use App\Models\Plot;
 use App\Models\RentSchedule;
 use App\Models\Spv;
 use App\Models\State;
-use App\Models\Taluka;
-use App\Services\CapacityService;
 use App\Services\LandRefService;
-use Carbon\Carbon;
+use App\Services\ShareService;
 use Illuminate\Http\Request;
 
-/** Small JSON endpoints for cascading dropdowns and live calculations in the drawer forms. */
+/** Small JSON endpoints for cascading selects and live previews in the forms. */
 class LookupController extends Controller
 {
-    public function cities(Request $request)
+    private function out(array $opts)
     {
-        return City::where('state_id', $request->integer('state_id'))->where('status', 'Active')->orderBy('name')->get()
-            ->map(fn ($c) => ['id' => $c->id, 'label' => "$c->name ($c->code)"]);
+        return response()->json(collect($opts)->map(fn ($l, $v) => ['id' => (string) $v, 'label' => $l])->values());
     }
 
-    public function talukas(Request $request)
+    public function districts(Request $r)
     {
-        return Taluka::where('city_id', $request->integer('city_id'))->where('status', 'Active')->orderBy('name')->get()
-            ->map(fn ($t) => ['id' => $t->id, 'label' => "$t->name ($t->code)"]);
+        return $this->out(District::where('state_id', (int) $r->state_id)->orderBy('id')->pluck('district_name', 'id')->all());
     }
 
-    /** SPVs of a park plus the park's location, used to pre-fill a new survey number. */
-    public function spvs(Request $request)
+    public function cities(Request $r)
     {
-        $park = Park::find($request->integer('park_id'));
-
-        return [
-            'spvs' => Spv::visibleTo()->where('park_id', $park?->id)->where('status', 'Active')->orderBy('spv_code')->get()->map(fn ($s) => ['id' => $s->id, 'label' => "$s->spv_code · $s->spv_name"]),
-            'park' => $park ? ['state_id' => $park->state_id, 'city_id' => $park->city_id, 'taluka_id' => $park->taluka_id] : null,
-            'cities' => $park ? $this->cities(new Request(['state_id' => $park->state_id])) : [],
-            'talukas' => $park ? $this->talukas(new Request(['city_id' => $park->city_id])) : [],
-        ];
+        return $this->out(City::where('district_id', (int) $r->district_id)->orderBy('id')->get()->mapWithKeys(fn ($c) => [$c->id => "$c->city_name · $c->city_type"])->all());
     }
 
-    public function landRefPreview(Request $request, LandRefService $refs)
+    public function parks(Request $r)
     {
-        $park = Park::find($request->integer('park_id'));
-        $state = State::find($request->integer('state_id'));
-        $city = City::find($request->integer('city_id'));
-        $taluka = Taluka::find($request->integer('taluka_id'));
-        if (! $park || ! $state || ! $city || ! $taluka) {
-            return ['ref' => null];
-        }
-
-        return ['ref' => $refs->preview($park, $state, $city, $taluka)];
+        return $this->out(Park::when($r->state_id, fn ($q, $v) => $q->where('state_id', $v))->orderBy('id')->get()->mapWithKeys(fn ($p) => [$p->id => "$p->park_code · $p->park_name"])->all());
     }
 
-    /** Lease form defaults from a survey number + park capacity. */
-    public function plot(Plot $plot, CapacityService $cap)
+    public function spvs(Request $r)
     {
-        abort_unless(auth()->user()->canAccessSpv($plot->spv_id), 403);
-        $plot->load(['park', 'spv', 'grid', 'currentOwnership.shares.party']);
-
-        return [
-            'land_ref_no' => $plot->land_ref_no,
-            'area_under_lease_acres' => (float) $plot->area_under_lease_acres,
-            'rate_per_acre' => (float) $plot->rate_per_acre,
-            'increment_pct' => (float) $plot->increment_pct,
-            'increment_after_yrs' => (int) $plot->increment_after_yrs,
-            'connectivity_mw' => $plot->grid?->connectivity_mw ? (float) $plot->grid->connectivity_mw : null,
-            'owners' => $plot->currentOwnership?->shares->map(fn ($s) => $s->party->party_name.' ('.fmt_num($s->share_percent, 4).'%)')->implode(', '),
-            'park_code' => $plot->park->park_code,
-            'spv_code' => $plot->spv->spv_code,
-            'park_id' => $plot->park_id,
-            'park_installed' => (float) $plot->park->installed_capacity_mw,
-            'park_leased_today' => $cap->leasedTodayInPark($plot->park),
-        ];
+        return $this->out(Spv::visibleTo()->when($r->park_id, fn ($q, $v) => $q->where('park_id', $v))->orderBy('id')->get()->mapWithKeys(fn ($s) => [$s->id => "$s->spv_code · $s->spv_name"])->all());
     }
 
-    /** Free MW on a lease over a period (sub-lease drawer capacity bar). */
-    public function leaseCapacity(Request $request, Lease $lease, CapacityService $cap)
+    /** Park → its state / district / city, so the land form can fill the location. */
+    public function park(Park $park)
     {
-        abort_unless(auth()->user()->canAccessSpv($lease->spv_id), 403);
-        $from = $request->date('start') ? Carbon::parse($request->date('start')) : $lease->lease_start_date->copy();
-        $to = $request->date('end') ? Carbon::parse($request->date('end')) : $lease->lease_end_date->copy();
-        if ($to->lt($from)) {
-            $to = $from->copy();
-        }
-        $exclude = $request->integer('exclude') ?: null;
-        $peak = $cap->peakSubLeased($lease, $from, $to, $exclude);
-
-        return [
-            'lease_no' => $lease->lease_no,
-            'lease_mw' => (float) $lease->leased_capacity_mw,
-            'lease_start' => $lease->lease_start_date->format('Y-m-d'),
-            'lease_end' => $lease->lease_end_date->format('Y-m-d'),
-            'from' => $from->format('d M Y'),
-            'to' => $to->format('d M Y'),
-            'peak' => $peak,
-            'free' => round((float) $lease->leased_capacity_mw - $peak, 3),
-            'sub_today' => $cap->subLeasedOn($lease),
-        ];
+        return response()->json(['state_id' => $park->state_id, 'district_id' => $park->district_id, 'city_id' => $park->city_id,
+            'districts' => District::where('state_id', $park->state_id)->orderBy('id')->pluck('district_name', 'id'),
+            'cities' => City::where('district_id', $park->district_id)->orderBy('id')->get()->mapWithKeys(fn ($c) => [$c->id => "$c->city_name · $c->city_type"])]);
     }
 
-    public function parkCapacity(Request $request, Park $park, CapacityService $cap)
+    /** Live preview of the land reference number on the new parcel page. */
+    public function landRef(Request $r, LandRefService $refs)
     {
-        $from = $request->date('start') ?? now();
-        $to = $request->date('end') ?? $from;
-        $peak = $cap->peakLeased($park, Carbon::parse($from), Carbon::parse($to), $request->integer('exclude') ?: null);
+        $ref = $refs->build(Spv::find($r->spv_id), State::find($r->state_id), $r->park_id ? Park::find($r->park_id) : null, $r->parcel_code, $r->ref_year ?: now()->year);
 
-        return ['installed' => (float) $park->installed_capacity_mw, 'peak' => $peak, 'free' => round((float) $park->installed_capacity_mw - $peak, 3)];
+        return response()->json(['ref' => $ref, 'exists' => $ref ? $refs->exists($ref) : false]);
     }
 
-    /** Landowner split of an instalment for the payment drawer. */
-    public function allocations(RentSchedule $schedule)
+    /** Farmer-wise shares of an instalment for the payment form. */
+    public function scheduleFarmers(RentSchedule $schedule, ShareService $shares)
     {
-        abort_unless(auth()->user()->canAccessSpv($schedule->lease->spv_id), 403);
+        abort_unless(auth()->user()->canAccessSpv($schedule->land->spv_id), 403);
 
-        return $schedule->allocations()->with('party')->get()->sortByDesc('share_percent')->values()->map(fn ($a) => [
-            'id' => $a->id,
-            'label' => $a->party->party_name.' ('.fmt_num($a->share_percent, 4).'%) · balance '.inr($a->remaining(), 2),
-            'party' => $a->party->party_name,
-            'share' => (float) $a->share_percent,
-            'gross' => (float) $a->gross_amount,
-            'tds' => (float) $a->tds_amount,
-            'paid' => (float) $a->paid_amount,
-            'remaining' => $a->remaining(),
-            'tds_ratio' => (float) $a->gross_amount > 0 ? (float) $a->tds_amount / (float) $a->gross_amount : 0,
-            'bank' => $a->party->bank_account_no ? $a->party->maskedBankAccount().' · '.$a->party->bank_ifsc.' · '.$a->party->bank_name_branch : null,
-        ]);
+        return response()->json($shares->forSchedule($schedule)->map(fn ($r) => [
+            'id' => (string) $r['farmer']->id, 'label' => $r['farmer']->owner_name.' · '.fmt_num($r['pct']).'%',
+            'share' => $r['share'], 'tds' => $r['tds'], 'paid' => $r['paid'], 'remaining' => $r['remaining'],
+        ])->values());
+    }
+
+    public function entities(Request $r, Land $land)
+    {
+        abort_unless(auth()->user()->canAccessSpv($land->spv_id), 403);
+
+        return $this->out(self::entityOptions($land, (string) $r->type));
+    }
+
+    /** Records of a parcel a document can be linked to. */
+    public static function entityOptions(Land $land, string $type): array
+    {
+        return match ($type) {
+            'Land' => [$land->id => $land->land_ref_no],
+            'Survey' => $land->surveys()->get()->mapWithKeys(fn ($x) => [$x->id => "$x->code · $x->village · Survey $x->survey_plot_no"])->all(),
+            'Farmer' => $land->farmers()->get()->mapWithKeys(fn ($x) => [$x->id => "$x->code · $x->owner_name"])->all(),
+            'Lease' => $land->leases()->orderBy('id')->get()->mapWithKeys(fn ($x) => [$x->id => "$x->code · $x->lessor_name"])->all(),
+            'Sublease' => $land->subleases()->orderBy('id')->get()->mapWithKeys(fn ($x) => [$x->id => "$x->code · $x->sublessee_name"])->all(),
+            'Compliance' => $land->compliance()->get()->mapWithKeys(fn ($x) => [$x->id => $x->code])->all(),
+            'Payment' => $land->payments()->with('farmer')->orderBy('id')->get()->mapWithKeys(fn ($x) => [$x->id => "$x->code · ".$x->farmer->owner_name.' · '.inr($x->gross_amount)])->all(),
+            default => [],
+        };
     }
 }

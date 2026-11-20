@@ -1,7 +1,8 @@
 @include('partials.form-open', ['action' => $state->exists ? route('states.update', $state) : route('states.store'), 'model' => $state])
   <fieldset>
-    <x-field name="name" label="State name" :value="$state->name" req :lock="$readonly" />
-    <x-field name="code" label="State code" :value="$state->code" req placeholder="GJ" hint="2 letters. Locked once a survey number uses it." :lock="$readonly || $state->codeLocked()" maxlength="2" />
-    <x-field name="status" label="Status" type="select" :options="opts('status')" :value="$state->status" req :lock="$readonly" :blank="false" />
+    <x-field name="state_name" label="State name" :value="$state->state_name" req :type="$readonly ? 'ro' : 'text'" />
+    <x-field name="state_code" label="State code" :value="$state->state_code" req placeholder="GJ" maxlength="2" :lock="$state->exists" :type="$readonly ? 'ro' : 'text'"
+      hint="2 letters. Locked after save because land reference numbers use it." />
   </fieldset>
+  @if ($state->exists && ! $readonly)<p class="hint">Changes to each field are recorded in the audit trail with the old and new value.</p>@endif
 </form>

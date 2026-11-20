@@ -2,44 +2,34 @@
 
 namespace App\View\Composers;
 
-use App\Models\ComplianceRecord;
-use App\Models\Document;
-use App\Models\Lease;
+use App\Models\AuditLog;
+use App\Models\City;
+use App\Models\District;
+use App\Models\Land;
 use App\Models\Park;
-use App\Models\Party;
-use App\Models\Plot;
-use App\Models\RentPayment;
-use App\Models\RentSchedule;
 use App\Models\Spv;
 use App\Models\State;
-use App\Models\City;
-use App\Models\SubLease;
-use App\Models\Taluka;
+use App\Models\User;
 use Illuminate\View\View;
 
-/** Record counts beside each nav item, limited to the user's SPVs. */
+/** Row counts shown beside each item of the left menu (as in the template). */
 class NavComposer
 {
     public function compose(View $view): void
     {
-        $u = auth()->user();
-        if (! $u) {
+        if (! auth()->check()) {
             return;
         }
         $view->with('navCounts', [
-            'plot' => Plot::visibleTo($u)->count(),
-            'lease' => Lease::visibleTo($u)->count(),
-            'schedule' => RentSchedule::visibleTo($u)->whereIn('status', ['Pending', 'Partially paid'])->whereDate('due_date', '<', now())->count() ?: '',
-            'payment' => RentPayment::visibleTo($u)->count(),
-            'sublease' => SubLease::visibleTo($u)->count(),
-            'compliance' => ComplianceRecord::visibleTo($u)->count(),
-            'document' => Document::visibleTo($u)->count(),
-            'party' => Party::count(),
-            'park' => Park::count(),
-            'spv' => Spv::visibleTo($u)->count(),
+            'land' => Land::visibleTo()->count(),
             'state' => State::count(),
+            'district' => District::count(),
             'city' => City::count(),
-            'taluka' => Taluka::count(),
+            'park' => Park::count(),
+            'spv' => Spv::visibleTo()->count(),
+            'report' => 11,
+            'user' => User::count(),
+            'audit' => AuditLog::count(),
         ]);
     }
 }

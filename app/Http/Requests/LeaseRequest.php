@@ -2,94 +2,111 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\LandUnit;
+use App\Models\Land;
 use App\Models\Lease;
-use App\Models\Plot;
-use App\Models\SubLease;
+use App\Services\CapacityService;
+use App\Services\RentScheduleService;
 use Carbon\Carbon;
-use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
-class LeaseRequest extends FormRequest
+class LeaseRequest extends BaseRequest
 {
-    public function authorize(): bool
+    protected array $zeroIfBlank = ['security_deposit', 'escalation_pct', 'escalation_every_yrs'];
+
+    protected function prepareForValidation(): void
     {
-        return true;
+        $this->upper(['lessor_pan']);
+        if ($this->tds_applicable !== 'Yes') {
+            $this->merge(['tds_rate' => 0]);
+        } elseif (! (float) $this->tds_rate) {
+            $this->merge(['tds_rate' => 10]);
+        }
     }
 
     public function rules(): array
     {
-        $lease = $this->route('lease');
-        $o = fn ($k) => Rule::in(config("solar.options.$k"));
-
         return [
-            'plot_id' => $lease ? ['prohibited'] : ['required', 'exists:plots,id'],
-            'lease_date' => ['nullable', 'date'],
+            'land_id' => $this->route('lease') ? ['prohibited'] : ['required', 'exists:lands,id'],
+            'lessor_name' => ['required', 'string', 'max:200'],
+            'lessor_pan' => ['nullable', 'regex:/^[A-Z]{5}\d{4}[A-Z]$/'],
+            'leased_area_acres' => ['required', 'numeric', 'gt:0'],
+            'leased_capacity_mw' => ['required', 'numeric', 'min:0'],
+            'lease_status' => ['required', $this->opt('lease_status')],
+            'lessor_address' => ['nullable', 'string', 'max:255'],
+            'lessor_state_id' => ['required', 'exists:states,id'],
+            'lessor_district_id' => ['required', 'exists:districts,id'],
+            'lessor_city_id' => ['required', 'exists:cities,id'],
+            'lessor_pincode' => ['nullable', 'digits:6'],
             'atl_date' => ['nullable', 'date'],
-            'registration_date' => ['nullable', 'date'],
+            'lease_date' => ['nullable', 'date'],
             'lease_start_date' => ['required', 'date'],
-            'lease_duration_months' => ['required', 'integer', 'min:1', 'max:1200'],
-            'total_lease_area' => ['required', 'numeric', 'gt:0'],
-            'land_unit' => ['required', $o('land_unit')],
-            'leased_capacity_mw' => ['required', 'numeric', 'min:0', 'max:999999'],
-            'rent_type' => ['required', $o('rent_type')],
-            'rent_rate' => ['required', 'numeric', 'min:0'],
-            'payment_frequency' => ['required', $o('payment_frequency')],
-            'escalation_pct' => ['required', 'numeric', 'min:0', 'max:100'],
-            'escalation_every_yrs' => ['required', 'integer', 'min:0', 'max:99'],
-            'security_deposit' => ['nullable', 'numeric', 'min:0'],
-            'tds_applicable' => ['required', $o('yes_no')],
-            'tds_rate' => ['required_if:tds_applicable,Yes', 'nullable', 'numeric', 'min:0', 'max:30'],
-            'gst_applicable' => ['required', $o('yes_no')],
+            'lease_duration_mths' => ['required', 'integer', 'min:1', 'max:1200'],
             'uni_number' => ['nullable', 'string', 'max:40'],
             'sro_doc_no' => ['nullable', 'string', 'max:40'],
             'agreement_no' => ['nullable', 'string', 'max:40'],
             'mutation_entry_no' => ['nullable', 'string', 'max:40'],
-            'status' => ['required', $lease ? $o('lease_status') : Rule::in(['Draft', 'Active'])],
-            'agreement_document' => ['nullable', 'file', 'max:'.config('solar.upload.max_kb'), 'mimes:'.implode(',', config('solar.upload.extensions')), 'extensions:'.implode(',', config('solar.upload.extensions'))],
+            'rent_rate_per_acre' => ['required', 'numeric', 'min:0'],
+            'rent_frequency' => ['required', $this->opt('rent_frequency')],
+            'security_deposit' => ['nullable', 'numeric', 'min:0'],
+            'escalation_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'escalation_every_yrs' => ['nullable', 'integer', 'min:0', 'max:99'],
+            'tds_applicable' => ['required', $this->opt('yes_no')],
+            'tds_rate' => ['nullable', 'numeric', 'min:0', 'max:30'],
+            'gst_applicable' => ['required', $this->opt('yes_no')],
         ];
     }
 
     public function withValidator(Validator $v): void
     {
+        $this->checkLocation($v, 'lessor_');
         $v->after(function (Validator $v) {
             if ($v->errors()->isNotEmpty()) {
                 return;
             }
             $lease = $this->route('lease');
-            $plot = $lease ? $lease->plot : Plot::find($this->plot_id);
-            if (! $this->user()->canAccessSpv($plot->spv_id)) {
-                $v->errors()->add('plot_id', 'You do not have access to this survey number’s SPV.');
+            $land = $lease?->land ?? Land::find($this->land_id);
+            if (! $this->user()->canAccessSpv($land->spv_id)) {
+                $v->errors()->add('land_id', 'You do not have access to this parcel’s SPV.');
 
                 return;
             }
-            $acres = LandUnit::acres($this->land_unit, (float) $this->total_lease_area);
-            if ($acres > (float) $plot->area_under_lease_acres + 0.0001) {
-                $v->errors()->add('total_lease_area', 'Lease area ('.fmt_num($acres, 4).' ac) is more than the survey number’s area under lease ('.fmt_num($plot->area_under_lease_acres, 4).' ac).');
+            if ((float) $this->leased_area_acres > (float) $land->area_under_lease_acres + 0.001) {
+                $v->errors()->add('leased_area_acres', 'Leased area ('.fmt_num($this->leased_area_acres).' ac) is more than the land’s area under lease ('.fmt_num($land->area_under_lease_acres).' ac).');
             }
-            if ($this->status === 'Active' && Lease::where('plot_id', $plot->id)->where('status', 'Active')->when($lease, fn ($q) => $q->whereKeyNot($lease->id))->exists()) {
-                $v->errors()->add('status', $plot->land_ref_no.' already has an active lease.');
+            if ($this->lease_status === 'Active' && Lease::where('land_id', $land->id)->where('lease_status', 'Active')->when($lease, fn ($q) => $q->whereKeyNot($lease->id))->exists()) {
+                $v->errors()->add('lease_status', $land->land_ref_no.' already has an active lease.');
             }
+            $cap = app(CapacityService::class);
+            [$from, $to] = $this->term();
             if ($lease) {
-                [$start, $end] = $this->term();
-                $outside = SubLease::where('lease_id', $lease->id)->whereIn('status', ['Draft', 'Active'])
-                    ->where(fn ($q) => $q->whereDate('start_date', '<', $start)->orWhereDate('end_date', '>', $end))->pluck('sub_lease_no');
-                if ($outside->isNotEmpty()) {
-                    $v->errors()->add('lease_start_date', 'Sub-leases '.$outside->implode(', ').' fall outside the new lease term. Change them first.');
+                $used = $cap->areaUsed($lease);
+                if ((float) $this->leased_area_acres + 0.001 < $used) {
+                    $v->errors()->add('leased_area_acres', fmt_num($used).' acres of this lease are already subleased. Leased area cannot go below that.');
                 }
-                if (in_array($this->status, ['Terminated', 'Draft'], true) && SubLease::where('lease_id', $lease->id)->where('status', 'Active')->exists()) {
-                    $v->errors()->add('status', 'This lease has active sub-leases. Cancel or expire them before changing the lease to '.$this->status.'.');
+                $mw = $cap->mwPeak($lease, $from, $to);
+                if ((float) $this->leased_capacity_mw + CapacityService::EPS < $mw) {
+                    $v->errors()->add('leased_capacity_mw', CapacityService::fmt($mw).' MW of this lease is already subleased at peak. Leased capacity cannot go below that.');
+                }
+            }
+            if ($this->lease_status === 'Active' && $land->park && (float) $land->park->installed_capacity_mw > 0) {
+                $free = round((float) $land->park->installed_capacity_mw - $cap->parkPeak($land->park, $from, $to, $lease?->id), 3);
+                if ((float) $this->leased_capacity_mw > $free + CapacityService::EPS) {
+                    $v->errors()->add('leased_capacity_mw', 'Only '.CapacityService::fmt(max(0, $free)).' MW of park '.$land->park->park_code.' ('.CapacityService::fmt((float) $land->park->installed_capacity_mw).' MW installed) is free for this lease period.');
                 }
             }
         });
     }
 
-    /** [start, end] where end = start + months − 1 day. */
+    /** @return array{0: Carbon, 1: Carbon} */
     public function term(): array
     {
         $start = Carbon::parse($this->lease_start_date)->startOfDay();
 
-        return [$start, $start->copy()->addMonthsNoOverflow((int) $this->lease_duration_months)->subDay()];
+        return [$start, RentScheduleService::endDate($start->toDateString(), (int) $this->lease_duration_mths)];
+    }
+
+    public function messages(): array
+    {
+        return ['lessor_pan.regex' => 'PAN must look like ABCDE1234F.', 'lessor_pincode.digits' => 'PIN code must be 6 digits.'];
     }
 }

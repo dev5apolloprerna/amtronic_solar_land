@@ -3,32 +3,32 @@
 namespace App\Services;
 
 use App\Models\Document;
-use App\Models\Plot;
+use App\Models\Land;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 
-/** Stores uploads. A file with the same plot + type + title becomes the next version; old versions are kept. */
+/** Stores uploads under documents/<SPV>/<land ref>/. Same parcel + type + title = next version; old versions are kept. */
 class DocumentService
 {
-    public function nextVersion(?int $plotId, string $docType, string $title): int
+    public function nextVersion(int $landId, string $type, string $title): int
     {
-        return (int) Document::withTrashed()->where('plot_id', $plotId)->where('doc_type', $docType)
-            ->whereRaw('LOWER(TRIM(title)) = ?', [mb_strtolower(trim($title))])->max('version_no') + 1;
+        return (int) Document::withTrashed()->where('land_id', $landId)->where('doc_type', $type)
+            ->whereRaw('LOWER(TRIM(doc_title)) = ?', [mb_strtolower(trim($title))])->max('version_no') + 1;
     }
 
-    public function store(UploadedFile $file, array $attrs): Document
+    public function store(UploadedFile $file, Land $land, array $attrs): Document
     {
-        $plot = isset($attrs['plot_id']) ? Plot::with('spv')->find($attrs['plot_id']) : null;
-        $folder = 'documents/'.($plot ? $plot->spv->spv_code.'/'.$plot->land_ref_no : 'general');
+        $folder = 'documents/'.$land->spv->spv_code.'/'.$land->land_ref_no;
         $name = now()->format('YmdHis').'_'.Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)).'.'.strtolower($file->getClientOriginalExtension());
         $path = $file->storeAs($folder, $name, config('solar.upload.disk'));
 
         return Document::create($attrs + [
+            'land_id' => $land->id,
+            'file_name' => $file->getClientOriginalName(),
             'file_path' => $path,
-            'original_name' => $file->getClientOriginalName(),
+            'file_size_kb' => (int) ceil($file->getSize() / 1024),
             'mime_type' => $file->getClientMimeType(),
-            'size_kb' => (int) ceil($file->getSize() / 1024),
-            'version_no' => $this->nextVersion($attrs['plot_id'] ?? null, $attrs['doc_type'], $attrs['title']),
+            'version_no' => $this->nextVersion($land->id, $attrs['doc_type'], $attrs['doc_title']),
             'uploaded_by' => auth()->id(),
         ]);
     }

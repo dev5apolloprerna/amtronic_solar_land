@@ -3,7 +3,7 @@
 @push('styles')<link rel="stylesheet" href="{{ asset('css/modules/users.css') }}">@endpush
 @push('scripts')<script src="{{ asset('js/modules/users.js') }}"></script>@endpush
 @section('content')
-  <x-page-head title="Users & roles" table="users · roles · role_permissions · user_spv_access" desc="Only the Super Admin sees this page. Add users, give each a role and SPV access, and decide per role who can view, add, edit, delete and export in every module.">
+  <x-page-head title="Users & roles" table="USER_MASTER · ROLE_SPV_MAPPING" desc="Only the Super Admin sees this page. Add users, give each a role and SPV access, and decide per role who can view, add, edit, delete and export in every module.">
     @if ($tab === 'users')<button class="btn pri" type="button" data-drawer="{{ route('users.create') }}">Add user</button>
     @else<button class="btn" type="button" data-drawer="{{ route('roles.create') }}">Add role</button>@endif
   </x-page-head>
@@ -69,7 +69,7 @@
         </table></div>
         @unless ($role->is_super)
           <div class="pb" style="flex-direction:row;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line-2)">
-            <span class="hint" id="permHint">Turning off View hides the module, or the tab inside a survey number, for this role. Each change is logged to the audit trail.</span>
+            <span class="hint" id="permHint">Turning off View hides the module, or the tab inside a parcel, for this role. Each change is logged to the audit trail.</span>
             <span class="actions"><a class="btn" href="{{ route('users.index', ['tab' => 'roles', 'role' => $role->id]) }}">Discard</a><button class="btn pri" type="submit">Save permissions</button></span>
           </div>
         @endunless

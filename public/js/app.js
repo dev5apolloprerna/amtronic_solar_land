@@ -184,7 +184,7 @@
     const max = Number($z.data('max-mb') || 100) * 1048576;
     if (f.size > max) { App.toast(f.name + ' is larger than ' + $z.data('max-mb') + ' MB'); this.value = ''; return; }
     $z.append('<div class="file-pill"><span class="mono">' + esc(f.name) + '</span><span class="sub">' + (f.size / 1048576).toFixed(2) + ' MB</span></div>');
-    const $title = $(this).closest('form').find('[name="title"]');
+    const $title = $(this).closest('form').find('[name="doc_title"]');
     if ($title.length && !$title.val()) $title.val(f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' '));
   });
 

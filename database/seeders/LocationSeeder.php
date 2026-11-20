@@ -3,39 +3,27 @@
 namespace Database\Seeders;
 
 use App\Models\City;
+use App\Models\District;
 use App\Models\State;
-use App\Models\Taluka;
 use Illuminate\Database\Seeder;
 
-/** States, cities and talukas with the codes used in Land Reference Numbers. */
+/** States, districts and cities / talukas exactly as in the HTML template. Add more from the masters. */
 class LocationSeeder extends Seeder
 {
     public function run(): void
     {
-        $data = [
-            ['Gujarat', 'GJ', [
-                ['Bhavnagar', 'BHV', [['Talaja', 'TLJ'], ['Mahuva', 'MHV'], ['Bhavnagar', 'BVN']]],
-                ['Amreli', 'AMR', [['Rajula', 'RJL']]],
-                ['Kutch', 'KTC', [['Bhuj', 'BHJ'], ['Rapar', 'RPR']]],
-            ]],
-            ['Maharashtra', 'MH', [
-                ['Solapur', 'SLP', [['Mohol', 'MHL'], ['Pandharpur', 'PDP']]],
-                ['Pune', 'PUN', [['Baramati', 'BRM']]],
-            ]],
-            ['Rajasthan', 'RJ', [['Jodhpur', 'JDH', [['Phalodi', 'PHL']]], ['Bikaner', 'BKN', [['Kolayat', 'KLY']]]]],
-            ['Karnataka', 'KA', [['Tumakuru', 'TMK', [['Pavagada', 'PVG']]]]],
-            ['Madhya Pradesh', 'MP', [['Neemuch', 'NMH', [['Jawad', 'JWD']]]]],
-            ['Andhra Pradesh', 'AP', [['Kurnool', 'KNL', [['Panyam', 'PNM']]]]],
-        ];
-
-        foreach ($data as [$sName, $sCode, $cities]) {
-            $state = State::updateOrCreate(['code' => $sCode], ['name' => $sName, 'status' => 'Active']);
-            foreach ($cities as [$cName, $cCode, $talukas]) {
-                $city = City::updateOrCreate(['state_id' => $state->id, 'code' => $cCode], ['name' => $cName, 'status' => 'Active']);
-                foreach ($talukas as [$tName, $tCode]) {
-                    Taluka::updateOrCreate(['city_id' => $city->id, 'code' => $tCode], ['name' => $tName, 'status' => 'Active']);
-                }
-            }
+        $st = [];
+        foreach ([['Gujarat', 'GJ'], ['Maharashtra', 'MH'], ['Rajasthan', 'RJ'], ['Karnataka', 'KA'], ['Madhya Pradesh', 'MP'], ['Andhra Pradesh', 'AP']] as [$n, $c]) {
+            $st[$c] = State::firstOrCreate(['state_code' => $c], ['state_name' => $n])->id;
+        }
+        $dt = [];
+        foreach ([['GJ', 'Bhavnagar'], ['GJ', 'Amreli'], ['GJ', 'Kutch'], ['MH', 'Solapur'], ['MH', 'Pune'], ['RJ', 'Jodhpur'], ['RJ', 'Bikaner'], ['KA', 'Tumakuru'], ['MP', 'Neemuch'], ['AP', 'Kurnool']] as [$s, $n]) {
+            $dt[$n] = District::firstOrCreate(['state_id' => $st[$s], 'district_name' => $n]);
+        }
+        foreach ([['Bhavnagar', 'Talaja', 'Taluka'], ['Bhavnagar', 'Mahuva', 'Taluka'], ['Bhavnagar', 'Bhavnagar', 'City'], ['Amreli', 'Rajula', 'Taluka'], ['Kutch', 'Bhuj', 'Taluka'],
+            ['Kutch', 'Rapar', 'Taluka'], ['Solapur', 'Mohol', 'Taluka'], ['Solapur', 'Pandharpur', 'Taluka'], ['Solapur', 'Solapur', 'City'], ['Pune', 'Baramati', 'Taluka'],
+            ['Jodhpur', 'Phalodi', 'Tehsil'], ['Bikaner', 'Kolayat', 'Tehsil'], ['Tumakuru', 'Pavagada', 'Taluka'], ['Neemuch', 'Jawad', 'Tehsil'], ['Kurnool', 'Panyam', 'Tehsil']] as [$d, $n, $t]) {
+            City::firstOrCreate(['district_id' => $dt[$d]->id, 'city_name' => $n], ['state_id' => $dt[$d]->state_id, 'city_type' => $t]);
         }
     }
 }

@@ -4,11 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>@yield('title', 'Dashboard') · {{ config('app.name', 'Solar Land Lease') }}</title>
+  <title>@yield('title', 'Dashboard') · {{ config('app.name', 'Leased Land') }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="{{ asset('css/app.css') }}">
-  <link rel="stylesheet" href="{{ asset('css/modules/subleases.css') }}">
   @stack('styles')
 </head>
 <body>
@@ -38,12 +37,8 @@
 
 <script src="{{ asset('js/vendor/jquery.min.js') }}"></script>
 <script src="{{ asset('js/app.js') }}"></script>
-{{-- drawer forms can open from any page, so their module scripts load everywhere; each acts only on its own module --}}
-<script src="{{ asset('js/modules/ownership.js') }}"></script>
-<script src="{{ asset('js/modules/leases.js') }}"></script>
-<script src="{{ asset('js/modules/payments.js') }}"></script>
-<script src="{{ asset('js/modules/subleases.js') }}"></script>
-<script src="{{ asset('js/modules/documents.js') }}"></script>
+{{-- drawer forms open from several pages, so the form scripts load everywhere; each acts only on its own module's drawer --}}
+<script src="{{ asset('js/modules/forms.js') }}"></script>
 @stack('scripts')
 </body>
 </html>

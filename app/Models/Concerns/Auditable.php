@@ -11,10 +11,10 @@ use App\Services\AuditService;
 trait Auditable
 {
     /** Fields never written to the audit trail in clear text. */
-    protected static array $auditMasked = ['password', 'remember_token', 'bank_account_no'];
+    protected static array $auditMasked = ['password', 'remember_token', 'bank_ac'];
 
     /** Fields ignored entirely. */
-    protected static array $auditIgnored = ['created_at', 'updated_at', 'updated_by', 'created_by', 'deleted_at', 'paid_amount', 'last_login_at', 'last_login_ip', 'failed_attempts'];
+    protected static array $auditIgnored = ['created_at', 'updated_at', 'updated_by', 'created_by', 'deleted_at', 'last_login_at', 'last_login_ip', 'failed_attempts'];
 
     public static function bootAuditable(): void
     {
@@ -63,6 +63,6 @@ trait Auditable
 
     public function auditLabel(): string
     {
-        return (string) $this->getKey();
+        return method_exists($this, 'getCodeAttribute') ? $this->code : (string) $this->getKey();
     }
 }

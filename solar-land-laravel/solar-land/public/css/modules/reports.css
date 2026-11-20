@@ -1,0 +1,7 @@
+/* Reports
+   Extracted from the provided admin HTML template. Do not restyle; extend only. */
+.rep-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.rep-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;text-decoration:none;color:var(--ink);display:flex;flex-direction:column;gap:4px}
+.rep-card:hover{border-color:var(--accent)}
+.rep-card b{font-size:14px}
+.rep-card span{color:var(--muted);font-size:12.5px}

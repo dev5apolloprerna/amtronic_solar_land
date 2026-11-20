@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
 
-/** The four roles of the HTML template with their permission matrix. */
+/** The four roles of the HTML template with the same permission strings (v=view a=add e=edit d=delete x=export). */
 class RoleSeeder extends Seeder
 {
     public function run(): void
@@ -14,13 +14,13 @@ class RoleSeeder extends Seeder
 
         $roles = [
             ['Super Admin', 'Full access. Manages users, roles and SPV access.', true, $all('vaedx')],
-            ['Land Manager', 'Maintains survey numbers, landowners, leases, sub-leases, compliance, documents and location masters.', false, [
-                'state' => 'vae', 'city' => 'vae', 'taluka' => 'vae', 'party' => 'vae', 'park' => 'vae', 'spv' => 'v', 'plot' => 'vaex', 'ownership' => 'vaed', 'grid' => 've',
-                'lease' => 'vaex', 'schedule' => 'v', 'payment' => 'v', 'sublease' => 'vaex', 'compliance' => 'vaex', 'document' => 'vaedx', 'report' => 'vx', 'audit' => 'v', 'setting' => 'v',
+            ['Land Manager', 'Creates and maintains land, lease, sublease, compliance, documents and location masters.', false, [
+                'state' => 'vae', 'district' => 'vae', 'city' => 'vae', 'spv' => 'v', 'park' => 'vae', 'land' => 'vaex', 'survey' => 'vaedx', 'farmer' => 'vaedx',
+                'lease' => 'vaex', 'schedule' => 'v', 'payment' => 'v', 'sublease' => 'vaex', 'compliance' => 'vaex', 'doc' => 'vaedx', 'report' => 'vx', 'audit' => 'v',
             ]],
-            ['Finance', 'Maintains the rent schedule and records landowner payments.', false, [
-                'state' => 'v', 'city' => 'v', 'taluka' => 'v', 'party' => 'v', 'park' => 'v', 'spv' => 'v', 'plot' => 'v', 'ownership' => 'v', 'grid' => 'v',
-                'lease' => 'vx', 'schedule' => 'vex', 'payment' => 'vaex', 'sublease' => 'v', 'compliance' => 'v', 'document' => 'va', 'report' => 'vx', 'audit' => 'v',
+            ['Finance', 'Maintains rent schedule and records payments.', false, [
+                'state' => 'v', 'district' => 'v', 'city' => 'v', 'spv' => 'v', 'park' => 'v', 'land' => 'v', 'survey' => 'v', 'farmer' => 'v',
+                'lease' => 'vx', 'schedule' => 'vex', 'payment' => 'vaex', 'sublease' => 'v', 'compliance' => 'v', 'doc' => 'va', 'report' => 'vx', 'audit' => 'v',
             ]],
             ['Auditor', 'Read-only access to everything, with export.', false, $all('vx')],
         ];

@@ -3,30 +3,30 @@
 namespace App\Console\Commands;
 
 use App\Models\Lease;
-use App\Models\SubLease;
+use App\Models\Sublease;
 use Illuminate\Console\Command;
 
-/** Marks leases and sub-leases Expired the day after their end date. Scheduled daily in routes/console.php. */
+/** Leases past their end date become Expired; subleases past their end date become Terminated. Runs daily (routes/console.php). */
 class ExpireAgreements extends Command
 {
     protected $signature = 'solar:expire-agreements';
 
-    protected $description = 'Set leases and sub-leases past their end date to Expired';
+    protected $description = 'Expire leases and terminate subleases that are past their end date';
 
     public function handle(): int
     {
         $today = now()->toDateString();
         $subs = 0;
-        SubLease::where('status', 'Active')->whereDate('end_date', '<', $today)->each(function (SubLease $s) use (&$subs) {
-            $s->update(['status' => 'Expired']);
+        Sublease::where('status', 'Active')->whereDate('sublease_end', '<', $today)->each(function (Sublease $s) use (&$subs) {
+            $s->update(['status' => 'Terminated']);
             $subs++;
         });
         $leases = 0;
-        Lease::where('status', 'Active')->whereDate('lease_end_date', '<', $today)->each(function (Lease $l) use (&$leases) {
-            $l->update(['status' => 'Expired']);
+        Lease::where('lease_status', 'Active')->whereDate('lease_end_date', '<', $today)->each(function (Lease $l) use (&$leases) {
+            $l->update(['lease_status' => 'Expired']);
             $leases++;
         });
-        $this->info("$leases leases and $subs sub-leases marked Expired.");
+        $this->info("$leases leases marked Expired and $subs subleases marked Terminated.");
 
         return self::SUCCESS;
     }

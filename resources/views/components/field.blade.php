@@ -10,11 +10,13 @@
   $val = old($name, $value instanceof \Carbon\CarbonInterface ? $value->format('Y-m-d') : ($value instanceof \BackedEnum ? $value->value : $value));
   if ($type === 'yn') { $options = ['Yes' => 'Yes', 'No' => 'No']; $type = 'select'; }
   $attrs = $attributes->except('id');
+  // read-only decimals: 410000.00 → 410,000 · 5.00 → 5
+  $shown = ($type === 'ro' || $lock) && is_string($val) && preg_match('/^-?\d+\.\d+$/', $val) ? fmt_num($val, 3) : $val;
 @endphp
 <div class="fld{{ $span ? ' span2' : '' }}">
   <label for="{{ $id }}">{{ $label }}@if ($req && $type !== 'ro' && ! $lock)<i class="req">*</i>@endif</label>
   @if ($type === 'ro' || $lock)
-    <div class="ro" id="{{ $id }}">{{ $slot->isEmpty() ? (($val === null || $val === '') ? '—' : (isset($options[$val]) ? $options[$val] : $val)) : $slot }}@if ($lock)<span class="lock">LOCKED</span>@endif</div>
+    <div class="ro" id="{{ $id }}">{{ $slot->isEmpty() ? (($val === null || $val === '') ? '—' : (isset($options[$val]) ? $options[$val] : $shown)) : $slot }}@if ($lock)<span class="lock">LOCKED</span>@endif</div>
   @elseif ($type === 'select')
     <select id="{{ $id }}" name="{{ $name }}" {{ $attrs }}>
       @if ($blank !== false)<option value="">{{ $blank }}</option>@endif

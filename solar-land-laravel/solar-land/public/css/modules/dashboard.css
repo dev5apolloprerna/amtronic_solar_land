@@ -1,0 +1,3 @@
+/* Dashboard extras (tiles, panels and bars come from the template in app.css) */
+.tile a{color:inherit;text-decoration:none}
+.mw-tiles .tile b span{font-size:14px}

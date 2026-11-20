@@ -9,36 +9,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/** CITY_MASTER: city, taluka or tehsil */
 class City extends Model
 {
     use SoftDeletes, HasUserStamps, Auditable;
 
     protected string $auditModule = 'city';
+    protected $fillable = ['state_id', 'district_id', 'city_name', 'city_type'];
 
-    protected $fillable = ['state_id', 'name', 'code', 'status'];
-
-    public function auditLabel(): string
-    {
-        return $this->name;
-    }
-
-    public function state(): BelongsTo
-    {
-        return $this->belongsTo(State::class);
-    }
-
-    public function talukas(): HasMany
-    {
-        return $this->hasMany(Taluka::class);
-    }
-
-    public function plots(): HasMany
-    {
-        return $this->hasMany(Plot::class);
-    }
-
-    public function codeLocked(): bool
-    {
-        return $this->exists && $this->plots()->withTrashed()->exists();
-    }
+    public function auditLabel(): string { return $this->city_name; }
+    public function state(): BelongsTo { return $this->belongsTo(State::class); }
+    public function district(): BelongsTo { return $this->belongsTo(District::class); }
+    public function lands(): HasMany { return $this->hasMany(Land::class); }
 }

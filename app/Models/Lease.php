@@ -3,49 +3,37 @@
 namespace App\Models;
 
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\HasCode;
 use App\Models\Concerns\HasUserStamps;
 use App\Models\Concerns\VisibleBySpv;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/** LEASE_MASTER */
 class Lease extends Model
 {
-    use SoftDeletes, HasUserStamps, Auditable, VisibleBySpv;
+    use SoftDeletes, HasUserStamps, Auditable, HasCode, VisibleBySpv;
 
+    public const CODE_PREFIX = 'LSE';
+    public const CODE_PAD = 3;
     protected string $auditModule = 'lease';
+    protected ?string $spvPath = 'land';
 
-    protected $fillable = ['lease_date', 'park_id', 'spv_id', 'plot_id', 'atl_date', 'registration_date', 'lease_start_date', 'lease_duration_months', 'lease_end_date',
-        'total_lease_area', 'land_unit', 'lease_area_acres', 'leased_capacity_mw', 'rent_type', 'rent_rate', 'annual_rent', 'payment_frequency', 'escalation_pct',
-        'escalation_every_yrs', 'security_deposit', 'tds_applicable', 'tds_rate', 'gst_applicable', 'uni_number', 'sro_doc_no', 'agreement_no', 'mutation_entry_no', 'status'];
+    protected $fillable = ['land_id', 'lessor_name', 'lessor_pan', 'leased_area_acres', 'leased_capacity_mw', 'lease_status', 'lessor_address', 'lessor_state_id',
+        'lessor_district_id', 'lessor_city_id', 'lessor_pincode', 'atl_date', 'lease_date', 'lease_start_date', 'lease_duration_mths', 'lease_end_date', 'uni_number',
+        'sro_doc_no', 'agreement_no', 'mutation_entry_no', 'rent_rate_per_acre', 'rent_frequency', 'rent_amount', 'security_deposit', 'escalation_pct',
+        'escalation_every_yrs', 'tds_applicable', 'tds_rate', 'gst_applicable'];
 
-    protected $casts = ['lease_date' => 'date', 'atl_date' => 'date', 'registration_date' => 'date', 'lease_start_date' => 'date', 'lease_end_date' => 'date',
-        'total_lease_area' => 'decimal:4', 'lease_area_acres' => 'decimal:4', 'leased_capacity_mw' => 'decimal:3', 'rent_rate' => 'decimal:2',
-        'annual_rent' => 'decimal:2', 'escalation_pct' => 'decimal:2', 'security_deposit' => 'decimal:2', 'tds_rate' => 'decimal:2'];
+    protected $casts = ['atl_date' => 'date', 'lease_date' => 'date', 'lease_start_date' => 'date', 'lease_end_date' => 'date', 'leased_area_acres' => 'decimal:2',
+        'leased_capacity_mw' => 'decimal:3', 'rent_rate_per_acre' => 'decimal:2', 'rent_amount' => 'decimal:2', 'security_deposit' => 'decimal:2',
+        'escalation_pct' => 'decimal:2', 'tds_rate' => 'decimal:2'];
 
-    public function auditLabel(): string
-    {
-        return (string) $this->lease_no;
-    }
-
-    public function park(): BelongsTo { return $this->belongsTo(Park::class); }
-    public function spv(): BelongsTo { return $this->belongsTo(Spv::class); }
-    public function plot(): BelongsTo { return $this->belongsTo(Plot::class); }
-    public function schedules(): HasMany { return $this->hasMany(RentSchedule::class)->orderBy('installment_no'); }
-    public function subLeases(): HasMany { return $this->hasMany(SubLease::class); }
-    public function documents(): MorphMany { return $this->morphMany(Document::class, 'documentable'); }
-
-    public function isActive(): bool
-    {
-        return $this->status === 'Active';
-    }
-
-    public static function nextNumber(): string
-    {
-        $last = static::withTrashed()->max('id') ?? 0;
-
-        return 'LSE'.str_pad((string) ($last + 1), 5, '0', STR_PAD_LEFT);
-    }
+    public function land(): BelongsTo { return $this->belongsTo(Land::class); }
+    public function lessorState(): BelongsTo { return $this->belongsTo(State::class, 'lessor_state_id'); }
+    public function lessorDistrict(): BelongsTo { return $this->belongsTo(District::class, 'lessor_district_id'); }
+    public function lessorCity(): BelongsTo { return $this->belongsTo(City::class, 'lessor_city_id'); }
+    public function schedules(): HasMany { return $this->hasMany(RentSchedule::class)->orderBy('due_date'); }
+    public function subleases(): HasMany { return $this->hasMany(Sublease::class); }
 }

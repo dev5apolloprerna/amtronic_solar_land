@@ -3,35 +3,31 @@
 namespace App\Http\Requests;
 
 use App\Models\Lease;
-use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
+use App\Services\CapacityService;
+use Carbon\Carbon;
 use Illuminate\Validation\Validator;
 
-class SubLeaseRequest extends FormRequest
+class SubleaseRequest extends BaseRequest
 {
-    public function authorize(): bool
+    protected function prepareForValidation(): void
     {
-        return true;
+        $this->upper(['sublessee_pan']);
     }
 
     public function rules(): array
     {
-        $sub = $this->route('sublease');
-        $o = fn ($k) => Rule::in(config("solar.options.$k"));
-
         return [
-            'lease_id' => $sub ? ['prohibited'] : ['required', 'exists:leases,id'],
-            'party_id' => ['required', Rule::exists('parties', 'id')->whereIn('party_type', ['Sub-lessee', 'Company', 'Other'])],
-            'capacity_mw' => ['required', 'numeric', 'gt:0', 'max:999999'],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
-            'rent_amount' => ['nullable', 'numeric', 'min:0'],
-            'rent_frequency' => ['required', $o('payment_frequency')],
-            'payment_terms' => ['nullable', 'string', 'max:2000'],
+            'lease_id' => $this->route('sublease') ? ['prohibited'] : ['required', 'exists:leases,id'],
+            'status' => ['required', $this->opt('sublease_status')],
+            'sublessee_name' => ['required', 'string', 'max:150'],
+            'sublessee_pan' => ['nullable', 'regex:/^[A-Z]{5}\d{4}[A-Z]$/'],
+            'sublease_area_acres' => ['required', 'numeric', 'gt:0'],
+            'capacity_mw' => ['required', 'numeric', 'min:0'],
+            'sublease_rent' => ['nullable', 'numeric', 'min:0'],
+            'sublease_start' => ['required', 'date'],
+            'sublease_end' => ['required', 'date', 'after_or_equal:sublease_start'],
             'agreement_no' => ['nullable', 'string', 'max:40'],
-            'lender_noc_obtained' => ['required', $o('yes_no')],
-            'status' => ['required', $sub ? $o('sublease_status') : Rule::in(['Draft', 'Active'])],
-            'agreement_document' => ['nullable', 'file', 'max:'.config('solar.upload.max_kb'), 'mimes:'.implode(',', config('solar.upload.extensions')), 'extensions:'.implode(',', config('solar.upload.extensions'))],
+            'lender_noc_obtained' => ['required', $this->opt('yes_no')],
         ];
     }
 
@@ -42,31 +38,45 @@ class SubLeaseRequest extends FormRequest
                 return;
             }
             $sub = $this->route('sublease');
-            $lease = $sub ? $sub->lease : Lease::with('plot.compliance')->find($this->lease_id);
-            if (! $this->user()->canAccessSpv($lease->spv_id)) {
-                $v->errors()->add('lease_id', 'You do not have access to this lease’s SPV.');
+            $L = $sub?->lease ?? Lease::with('land.compliance')->find($this->lease_id);
+            if (! $this->user()->canAccessSpv($L->land->spv_id)) {
+                $v->errors()->add('lease_id', 'You do not have access to this lease.');
 
                 return;
             }
-            if (! $sub && $lease->status !== 'Active') {
-                $v->errors()->add('lease_id', $lease->lease_no.' is '.$lease->status.'. Sub-leases can only be carved out of an active lease.');
+            $cap = app(CapacityService::class);
+            if ($this->status !== 'Terminated') {
+                $free = $cap->areaFree($L, $sub?->id);
+                if ((float) $this->sublease_area_acres > $free + 0.001) {
+                    $v->errors()->add('sublease_area_acres', 'Only '.fmt_num(max(0, $free)).' acres of '.$L->code.' are free to sublease. Reduce the area to '.fmt_num(max(0, $free)).' acres or less.');
+                }
             }
-            if ($this->start_date < $lease->lease_start_date->format('Y-m-d')) {
-                $v->errors()->add('start_date', 'Sub-lease cannot start before the lease starts ('.fmt_date($lease->lease_start_date).').');
+            if ($this->status === 'Active' && (float) $this->capacity_mw > 0) {
+                $from = Carbon::parse($this->sublease_start);
+                $to = Carbon::parse($this->sublease_end);
+                $free = $cap->mwFree($L, $from, $to, $sub?->id);
+                if ((float) $this->capacity_mw > $free + CapacityService::EPS) {
+                    $v->errors()->add('capacity_mw', $free <= CapacityService::EPS
+                        ? 'No MW of '.$L->code.' ('.CapacityService::fmt((float) $L->leased_capacity_mw).' MW) is free between '.$from->format('d M Y').' and '.$to->format('d M Y').'.'
+                        : 'Only '.CapacityService::fmt($free).' MW of '.$L->code.' is free between '.$from->format('d M Y').' and '.$to->format('d M Y').'. Enter '.CapacityService::fmt($free).' MW or less.');
+                }
             }
-            if ($this->end_date > $lease->lease_end_date->format('Y-m-d')) {
-                $v->errors()->add('end_date', 'Sub-lease cannot end after the lease ends ('.fmt_date($lease->lease_end_date).').');
+            if ($this->sublease_start < $L->lease_start_date->toDateString()) {
+                $v->errors()->add('sublease_start', 'Sublease cannot start before the lease starts ('.fmt_date($L->lease_start_date).').');
             }
-            $cm = $lease->plot->compliance;
+            if ($this->sublease_end > $L->lease_end_date->toDateString()) {
+                $v->errors()->add('sublease_end', 'Sublease cannot end after the lease ends ('.fmt_date($L->lease_end_date).').');
+            }
+            $cm = $L->land->compliance;
             if ($this->status === 'Active' && $cm && $cm->mortgage_created === 'Yes' && $this->lender_noc_obtained !== 'Yes') {
-                $v->errors()->add('lender_noc_obtained', $lease->plot->land_ref_no.' is mortgaged to '.($cm->lender_name ?: 'a lender').'. An active sub-lease needs the lender’s NOC.');
+                $v->errors()->add('lender_noc_obtained', $L->land->land_ref_no.' is mortgaged to '.$cm->lender_name.'. An active sublease needs the lender’s NOC.');
             }
         });
     }
 
     public function messages(): array
     {
-        return ['party_id.exists' => 'Choose a party of type Sub-lessee, Company or Other.', 'capacity_mw.gt' => 'Sub-lease capacity must be more than 0 MW.',
-            'end_date.after_or_equal' => 'Sub-lease end must be on or after its start.'];
+        return ['sublessee_pan.regex' => 'PAN must look like ABCDE1234F.', 'sublease_end.after_or_equal' => 'Sublease end must be after its start.',
+            'sublease_area_acres.gt' => 'Sublease area must be more than 0.'];
     }
 }

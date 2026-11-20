@@ -2,49 +2,43 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Models\Park;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
-class SpvRequest extends FormRequest
+class SpvRequest extends BaseRequest
 {
-    public function authorize(): bool
-    {
-        return true;
-    }
-
     protected function prepareForValidation(): void
     {
-        $this->merge(array_filter([
-            'spv_code' => $this->has('spv_code') ? strtoupper(trim((string) $this->spv_code)) : null,
-            'cin' => $this->cin ? strtoupper(trim((string) $this->cin)) : null,
-        ], fn ($v) => $v !== null));
+        $this->upper(['spv_code']);
     }
 
     public function rules(): array
     {
-        $spv = $this->route('spv');
+        $s = $this->route('spv');
 
         return [
-            'spv_code' => $spv ? ['prohibited'] : ['required', 'alpha_num', 'between:2,12', Rule::unique('spvs', 'spv_code')],
-            'spv_name' => ['required', 'string', 'max:150'],
+            'state_id' => ['required', 'exists:states,id'],
             'park_id' => ['required', 'exists:parks,id'],
-            'party_id' => ['nullable', Rule::exists('parties', 'id')->where('party_type', 'Company')],
-            'cin' => ['nullable', 'regex:/^[LU]\d{5}[A-Z]{2}\d{4}[A-Z]{3}\d{6}$/'],
-            'incorporation_date' => ['nullable', 'date', 'before_or_equal:today'],
-            'registered_address' => ['nullable', 'string', 'max:255'],
-            'contact_person' => ['nullable', 'string', 'max:120'],
-            'mobile' => ['nullable', 'regex:/^[6-9]\d{9}$/'],
-            'email' => ['nullable', 'email', 'max:150'],
-            'technology' => ['required', Rule::in(config('solar.options.technology'))],
+            'spv_code' => $s ? ['prohibited'] : ['required', 'alpha_num', 'between:2,12', Rule::unique('spvs', 'spv_code')],
+            'spv_name' => ['required', 'string', 'max:150'],
+            'technology' => ['nullable', $this->opt('technology')],
             'capacity_mwp' => ['nullable', 'numeric', 'min:0'],
-            'project_status' => ['required', Rule::in(config('solar.options.project_status'))],
-            'status' => ['required', Rule::in(config('solar.options.status'))],
+            'status' => ['nullable', $this->opt('spv_status')],
         ];
+    }
+
+    public function withValidator(Validator $v): void
+    {
+        $v->after(function (Validator $v) {
+            if ($this->park_id && Park::whereKey($this->park_id)->value('state_id') != $this->state_id) {
+                $v->errors()->add('park_id', 'Selected park is not in the selected state.');
+            }
+        });
     }
 
     public function messages(): array
     {
-        return ['spv_code.prohibited' => 'SPV code is locked after saving.', 'cin.regex' => 'CIN must be 21 characters, e.g. U40106GJ2023PTC123456.',
-            'party_id.exists' => 'Choose a party of type Company as the SPV owner.', 'mobile.regex' => 'Mobile must be a 10-digit Indian number.'];
+        return ['spv_code.prohibited' => 'SPV code is locked after save because land reference numbers use it.', 'spv_code.unique' => 'This SPV code already exists.'];
     }
 }

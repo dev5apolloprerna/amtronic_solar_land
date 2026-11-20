@@ -2,37 +2,29 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class StateRequest extends FormRequest
+class StateRequest extends BaseRequest
 {
-    public function authorize(): bool
-    {
-        return true; // route middleware checks the role permission
-    }
-
     protected function prepareForValidation(): void
     {
-        if ($this->has('code')) {
-            $this->merge(['code' => strtoupper(trim((string) $this->code))]);
-        }
+        $this->upper(['state_code']);
     }
 
     public function rules(): array
     {
-        $state = $this->route('state');
-        $locked = $state?->codeLocked();
+        $st = $this->route('state');
 
         return [
-            'name' => ['required', 'string', 'max:80', Rule::unique('states', 'name')->ignore($state?->id)],
-            'code' => $locked ? ['prohibited'] : ['required', 'alpha', 'size:2', Rule::unique('states', 'code')->ignore($state?->id)],
-            'status' => ['required', Rule::in(config('solar.options.status'))],
+            'state_name' => ['required', 'string', 'max:80', Rule::unique('states', 'state_name')->ignore($st?->id)],
+            // locked after save because land reference numbers use it
+            'state_code' => $st ? ['prohibited'] : ['required', 'alpha', 'size:2', Rule::unique('states', 'state_code')],
         ];
     }
 
     public function messages(): array
     {
-        return ['code.prohibited' => 'The state code is locked because Land Reference Numbers already use it.', 'code.size' => 'State code must be exactly 2 letters, e.g. GJ.'];
+        return ['state_code.prohibited' => 'State code is locked after save because land reference numbers use it.', 'state_code.size' => 'State code must be 2 letters, e.g. GJ.',
+            'state_name.unique' => 'A state with this name or code already exists.', 'state_code.unique' => 'A state with this name or code already exists.'];
     }
 }

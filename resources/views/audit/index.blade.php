@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Audit Trail')
 @section('content')
-  <x-page-head title="Audit trail" table="audit_logs" desc="Every create, edit, delete, export and sign-in is written here with the user, time, IP address and the old and new value of each changed field. Entries cannot be edited or deleted.">
+  <x-page-head title="Audit trail" table="AUDIT_TRAIL" desc="Every create, edit, delete, export and sign-in is written here with the user, time, IP address and the old and new value of each changed field. Entries cannot be edited or deleted.">
     <x-export-buttons route="audit.index" module="audit" />
   </x-page-head>
   <x-filter-bar placeholder="Search record, field or value…">

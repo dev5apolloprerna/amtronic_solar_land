@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Park;
-use App\Models\Party;
 use App\Models\Spv;
 use App\Services\ReportService;
 use Illuminate\Http\Request;
@@ -37,9 +36,8 @@ class ReportController extends Controller
             'key' => $report, 'title' => $title, 'desc' => $desc, 'filters' => $filters, 'dateLabel' => $dateLabel,
             'headings' => $headings, 'rows' => $paged, 'sum' => $sum, 'totals' => $this->totals($rows, $sum),
             'opts' => [
-                'park' => Park::orderBy('park_code')->pluck('park_code', 'id')->all(),
-                'spv' => Spv::visibleTo()->orderBy('spv_code')->pluck('spv_code', 'id')->all(),
-                'party' => Party::orderBy('party_name')->pluck('party_name', 'id')->all(),
+                'park' => Park::orderBy('id')->pluck('park_code', 'id')->all() + ['NOP' => 'NOP · no park'],
+                'spv' => Spv::visibleTo()->orderBy('id')->pluck('spv_code', 'id')->all(),
             ],
         ]);
     }

@@ -12,12 +12,6 @@ class DashboardController extends Controller
     {
         $u = $request->user();
 
-        return view('dashboard', [
-            'm' => $dash->metrics($u),
-            'due' => $u->hasPermission('schedule') ? $dash->dueRent($u) : collect(),
-            'parks' => $dash->parkCapacity($u),
-            'leaseUse' => $dash->leaseUse($u),
-            'recent' => $u->hasPermission('audit') ? AuditLog::latest('id')->limit(6)->get() : collect(),
-        ]);
+        return view('dashboard', ['d' => $dash->build($u), 'recent' => $u->hasPermission('audit') ? AuditLog::latest('id')->limit(6)->get() : collect()]);
     }
 }

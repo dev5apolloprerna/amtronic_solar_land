@@ -2,102 +2,66 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\LandAccess;
+use App\Http\Requests\DocumentRequest;
 use App\Models\Document;
-use App\Models\Plot;
+use App\Models\Land;
 use App\Services\DocumentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rule;
 
-/** Scans and agreements, versioned by plot + type + title. Old versions are kept. */
+/** DOCUMENT_REPOSITORY · files linked to the parcel or one of its records; same type + title = new version */
 class DocumentController extends Controller
 {
-    public function __construct(private DocumentService $docs) {}
+    use LandAccess;
 
-    public function index(Request $request)
+    public function create(Request $request, Land $land)
     {
-        $q = Document::visibleTo()->with(['plot', 'uploader'])
-            ->when($request->q, fn ($q, $s) => $q->where(fn ($w) => $w->where('title', 'like', "%$s%")->orWhere('original_name', 'like', "%$s%")
-                ->orWhereHas('plot', fn ($p) => $p->where('land_ref_no', 'like', "%$s%"))))
-            ->when($request->doc_type, fn ($q, $v) => $q->where('doc_type', $v))
-            ->when($request->linked, fn ($q, $v) => $q->where('documentable_type', Document::LINKABLE[$v] ?? ''))
-            ->latest();
+        $this->guardLand($land);
+        $d = new Document(['land_id' => $land->id, 'linked_entity_type' => $request->type ?: 'Land', 'linked_entity_id' => $request->id, 'doc_type' => $request->doc_type, 'doc_title' => $request->title, 'is_original_scan' => 'Yes']);
 
-        if ($export = $this->maybeExport('document', 'Document Register', ['Title', 'Type', 'Land ref no.', 'Linked to', 'Record', 'File', 'Size KB', 'Version', 'Original scan', 'Uploaded by', 'Uploaded at'],
-            $q->get()->map(fn ($d) => [$d->title, $d->doc_type, $d->plot?->land_ref_no, $d->linkedLabel(), $d->documentable_id, $d->original_name, $d->size_kb, $d->version_no, $d->is_original_scan,
-                $d->uploader?->username, $d->created_at->format('Y-m-d H:i')]))) {
-            return $export;
-        }
-
-        return view('documents.index', ['rows' => $q->paginate(config('solar.per_page'))->withQueryString(), 'total' => Document::visibleTo()->count()]);
+        return $this->drawer('Upload document', 'DOCUMENT_REPOSITORY · '.$land->land_ref_no, 'lands.forms.document',
+            ['d' => $d, 'land' => $land, 'entityOpts' => LookupController::entityOptions($land, $d->linked_entity_type)], module: 'doc', saveLabel: 'Upload');
     }
 
-    public function create(Request $request)
+    public function store(DocumentRequest $request, Land $land, DocumentService $svc)
     {
-        $plot = $request->plot_id ? Plot::visibleTo()->find($request->plot_id) : null;
+        $this->guardLand($land);
+        $d = $request->validated();
+        if ($d['linked_entity_type'] === 'Land') {
+            $d['linked_entity_id'] = $land->id;
+        } elseif (! array_key_exists($d['linked_entity_id'], LookupController::entityOptions($land, $d['linked_entity_type']))) {
+            return $this->refuse('The selected '.mb_strtolower($d['linked_entity_type']).' record is not on '.$land->land_ref_no.'.');
+        }
+        $doc = $svc->store($request->file('file'), $land, collect($d)->except(['file', 'land_id'])->all());
 
-        return $this->drawer('Upload document', 'DOCUMENTS', 'documents.form', [
-            'plot' => $plot,
-            'pre' => $request->only(['linked', 'record', 'doc_type', 'title']),
-            'plotOpts' => $plot ? [] : Plot::visibleTo()->orderBy('land_ref_no')->pluck('land_ref_no', 'id')->all(),
-            'records' => $plot ? $this->linkableRecords($plot) : [],
-        ], module: 'document', saveLabel: 'Upload');
+        return $this->ok("{$doc->code} uploaded".($doc->version_no > 1 ? " as version {$doc->version_no}" : ''), $this->tabUrl($land, 'doc'));
     }
 
-    public function store(Request $request)
+    /** Documents cannot be edited (template rule): the drawer shows details read-only. */
+    public function show(Document $document)
     {
-        $data = $request->validate([
-            'plot_id' => ['required', 'exists:plots,id'],
-            'linked' => ['required', Rule::in(array_keys(Document::LINKABLE))],
-            'record' => ['nullable', 'integer'],
-            'doc_type' => ['required', Rule::in(config('solar.options.doc_type'))],
-            'title' => ['required', 'string', 'max:200'],
-            'is_original_scan' => ['required', Rule::in(['Yes', 'No'])],
-            'file' => ['required', 'file', 'max:'.config('solar.upload.max_kb'), 'mimes:'.implode(',', config('solar.upload.extensions')), 'extensions:'.implode(',', config('solar.upload.extensions'))],
-        ], ['file.required' => 'Choose a file to upload (100 MB maximum).', 'file.max' => 'The maximum upload size is 100 MB.']);
-        $plot = Plot::findOrFail($data['plot_id']);
-        abort_unless(auth()->user()->canAccessSpv($plot->spv_id), 403);
+        $this->guardLand($document->land);
 
-        $class = Document::LINKABLE[$data['linked']];
-        $recordId = $data['linked'] === 'Plot' ? $plot->id : (int) $data['record'];
-        $allowed = collect($this->linkableRecords($plot)[$data['linked']] ?? [])->keys()->map(fn ($k) => (int) $k);
-        if ($data['linked'] !== 'Plot' && ! $allowed->contains($recordId)) {
-            return $this->refuse('Choose a '.strtolower($data['linked']).' record that belongs to this survey number.');
-        }
-        $doc = $this->docs->store($request->file('file'), [
-            'plot_id' => $plot->id, 'documentable_type' => $class, 'documentable_id' => $recordId,
-            'doc_type' => $data['doc_type'], 'title' => $data['title'], 'is_original_scan' => $data['is_original_scan'],
-        ]);
-
-        return $this->ok("{$doc->original_name} saved as v{$doc->version_no}");
+        return $this->drawer('Document details', 'DOCUMENT_REPOSITORY · '.$document->code, 'lands.forms.document',
+            ['d' => $document, 'land' => $document->land, 'entityOpts' => []], true, 'doc');
     }
 
     public function download(Document $document)
     {
-        abort_unless(! $document->plot || auth()->user()->canAccessSpv($document->plot->spv_id), 403);
-        abort_unless(Storage::disk(config('solar.upload.disk'))->exists($document->file_path), 404, 'The file is missing from storage.');
+        $this->guardLand($document->land);
+        $disk = Storage::disk(config('solar.upload.disk'));
+        abort_unless($disk->exists($document->file_path), 404, 'The file is missing from storage.');
 
-        return Storage::disk(config('solar.upload.disk'))->download($document->file_path, $document->original_name);
+        return $disk->download($document->file_path, $document->file_name);
     }
 
     public function destroy(Document $document)
     {
-        abort_unless(! $document->plot || auth()->user()->canAccessSpv($document->plot->spv_id), 403);
-        $document->delete(); // soft delete: the file stays on disk for audit
+        $land = $document->land;
+        $this->guardLand($land);
+        $document->delete(); // soft delete: file is kept for the audit trail
 
-        return $this->ok("{$document->title} v{$document->version_no} deleted");
-    }
-
-    /** Records of a plot a document can be linked to: ['Lease' => [id => label], ...] */
-    private function linkableRecords(Plot $plot): array
-    {
-        return [
-            'Plot' => [$plot->id => $plot->land_ref_no],
-            'Lease' => $plot->leases()->pluck('lease_no', 'id')->all(),
-            'Sub-lease' => \App\Models\SubLease::whereIn('lease_id', $plot->leases()->pluck('id'))->pluck('sub_lease_no', 'id')->all(),
-            'Compliance' => $plot->compliance ? [$plot->compliance->id => 'Compliance record'] : [],
-            'Payment' => \App\Models\RentPayment::whereHas('allocation.schedule', fn ($q) => $q->where('plot_id', $plot->id))->pluck('payment_no', 'id')->all(),
-            'Party' => $plot->currentOwnership?->shares()->with('party')->get()->mapWithKeys(fn ($s) => [$s->party_id => $s->party->party_name])->all() ?? [],
-        ];
+        return $this->ok("{$document->code} deleted", $this->tabUrl($land, 'doc'));
     }
 }

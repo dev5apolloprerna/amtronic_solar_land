@@ -1,0 +1,10 @@
+/* Users & roles: role picker, permission matrix
+   Extracted from the provided admin HTML template. Do not restyle; extend only. */
+.role-pick{display:flex;gap:8px;flex-wrap:wrap}
+.role-pick button{border:1px solid var(--line);background:var(--surface);border-radius:20px;padding:5px 12px;cursor:pointer;font-size:13px}
+.role-pick button.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.mx td,.mx th{text-align:center}
+.mx td:first-child,.mx th:first-child{text-align:left}
+.mx input{width:16px;height:16px;cursor:pointer}
+.role-pick a{border:1px solid var(--line);background:var(--surface);border-radius:20px;padding:5px 12px;font-size:13px;color:var(--ink);text-decoration:none}
+.role-pick a.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
